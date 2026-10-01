@@ -1,7 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import joblib
+import numpy as np
 import pandas as pd
 from pathlib import Path
 
@@ -16,14 +17,36 @@ app.add_middleware(
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+MODELS_DIR = BASE_DIR / "ml" / "models"
 
-MODEL_PATH = BASE_DIR / "ml" / "models" / "catboost_model.pkl"
-PREPROCESSOR_PATH = BASE_DIR / "ml" / "models" / "preprocessor.pkl"
-THRESHOLD_PATH = BASE_DIR / "ml" / "models" / "threshold.pkl"
+PREPROCESSOR_PATH = MODELS_DIR / "preprocessor.pkl"
+THRESHOLD_PATH = MODELS_DIR / "threshold.pkl"
+WEIGHTS_PATH = MODELS_DIR / "ensemble_weights.pkl"
+RESULTS_PATH = MODELS_DIR / "final_results.pkl"
 
-model = joblib.load(MODEL_PATH)
-preprocessor = joblib.load(PREPROCESSOR_PATH)
-threshold = joblib.load(THRESHOLD_PATH)
+# Order must match the training notebook:
+# model_names = ["Decision Tree", "Random Forest", "CatBoost", "LightGBM"]
+BASE_MODEL_FILES = [
+    ("Decision Tree", "decision_tree_model.pkl"),
+    ("Random Forest", "random_forest_model.pkl"),
+    ("CatBoost", "catboost_model.pkl"),
+    ("LightGBM", "lightgbm_model.pkl"),
+]
+
+try:
+    preprocessor = joblib.load(PREPROCESSOR_PATH)
+    threshold = float(joblib.load(THRESHOLD_PATH))
+    ensemble_weights = np.asarray(joblib.load(WEIGHTS_PATH), dtype=float)
+    base_models = [joblib.load(MODELS_DIR / f) for _, f in BASE_MODEL_FILES]
+    final_results = joblib.load(RESULTS_PATH)
+except FileNotFoundError as exc:
+    raise RuntimeError(f"Missing ML artifact: {exc.filename}") from exc
+
+if len(ensemble_weights) != len(base_models):
+    raise RuntimeError(
+        f"ensemble_weights has length {len(ensemble_weights)} "
+        f"but {len(base_models)} base models were loaded."
+    )
 
 
 class ClaimRequest(BaseModel):
@@ -70,24 +93,56 @@ class ClaimRequest(BaseModel):
     power_rpm: float
 
 
+def model_info_payload() -> dict:
+    return {
+        "model": final_results.get("model"),
+        "weights": {
+            name: float(w)
+            for (name, _), w in zip(BASE_MODEL_FILES, ensemble_weights.tolist())
+        },
+        "threshold": threshold,
+        "precision": final_results.get("precision"),
+        "recall": final_results.get("recall"),
+        "f1_score": final_results.get("f1_score"),
+        "pr_auc": final_results.get("pr_auc"),
+        "roc_auc": final_results.get("roc_auc"),
+    }
+
+
 @app.get("/")
 def root():
     return {
+        "status": "ok",
         "message": "PolicyGuard API is running",
-        "model": "CatBoost"
+        **model_info_payload(),
     }
+
+
+@app.get("/model-info")
+def model_info():
+    return model_info_payload()
 
 
 @app.post("/predict")
 def predict(data: ClaimRequest):
-    input_df = pd.DataFrame([data.model_dump()])
+    try:
+        input_df = pd.DataFrame([data.model_dump()])
+        processed_data = preprocessor.transform(input_df)
+        base_probabilities = np.column_stack(
+            [m.predict_proba(processed_data)[:, 1] for m in base_models]
+        )
+        # Finalized weighted soft-voting ensemble, exactly as trained.
+        probability = float((base_probabilities @ ensemble_weights)[0])
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {exc}")
 
-    processed_data = preprocessor.transform(input_df)
-
-    probability = float(model.predict_proba(processed_data)[0][1])
+    if not 0.0 <= probability <= 1.0:
+        raise HTTPException(
+            status_code=500, detail="Model returned an out-of-range probability."
+        )
     prediction = int(probability >= threshold)
 
     return {
         "claim_probability": round(probability, 4),
-        "claim_prediction": prediction
+        "claim_prediction": prediction,
     }

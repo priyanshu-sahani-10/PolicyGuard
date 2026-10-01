@@ -12,4 +12,9 @@ export async function predictClaim(payload) {
   return response.data;
 }
 
+export async function getModelInfo() {
+  const response = await apiClient.get("/model-info");
+  return response.data;
+}
+
 export default apiClient;
