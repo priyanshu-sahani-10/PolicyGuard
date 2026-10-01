@@ -1,66 +1,91 @@
-export default function PredictionResult({ result }) {
+import { MODEL_NAME, THRESHOLD } from "../data/fields";
+
+export function formatPercent(p) {
+  return `${(Math.round(Number(p) * 1000) / 10).toFixed(1)}%`;
+}
+
+export function formatTime(iso) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+/**
+ * Compact result panel. `result` is a history record or raw API response
+ * { claim_probability, claim_prediction, timestamp?, threshold?, model? }.
+ */
+export default function PredictionResult({ result, loading }) {
+  if (loading) {
+    return (
+      <div className="card result" aria-live="polite">
+        <p className="card-title">Prediction Result</p>
+        <p className="muted">Scoring profile with {MODEL_NAME}…</p>
+      </div>
+    );
+  }
+
   if (!result) return null;
 
-  const probability = result.claim_probability ?? 0;
-  const percent = Math.round(probability * 1000) / 10; // one decimal
+  const probability = Number(result.claim_probability ?? 0);
   const isLikely = result.claim_prediction === 1;
-
-  // Circular indicator math
-  const radius = 54;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (probability * circumference);
+  const threshold = result.threshold ?? THRESHOLD;
+  const model = result.model ?? MODEL_NAME;
+  const percent = formatPercent(probability);
+  const above = probability >= threshold;
 
   return (
-    <div
-      className={`result-card ${isLikely ? "result-likely" : "result-unlikely"}`}
-      role="status"
-      aria-live="polite"
-    >
-      <div className="result-main">
-        <div className="gauge">
-          <svg viewBox="0 0 140 140" width="140" height="140">
-            <circle cx="70" cy="70" r={radius} className="gauge-track" />
-            <circle
-              cx="70"
-              cy="70"
-              r={radius}
-              className="gauge-fill"
-              strokeDasharray={circumference}
-              strokeDashoffset={offset}
-            />
-            <text x="70" y="66" textAnchor="middle" className="gauge-percent">
-              {percent}%
-            </text>
-            <text x="70" y="86" textAnchor="middle" className="gauge-label">
-              probability
-            </text>
-          </svg>
-        </div>
-
-        <div className="result-text">
-          <span
-            className={`badge ${isLikely ? "badge-danger" : "badge-success"}`}
-          >
-            {isLikely ? "Claim Likely" : "Claim Unlikely"}
-          </span>
-          <p className="result-desc">
-            {isLikely
-              ? "The model estimates a higher risk of a claim for this profile. Consider manual review."
-              : "The model estimates a lower risk of a claim for this profile."}
-          </p>
-          <div className="progress">
-            <div
-              className="progress-fill"
-              style={{ width: `${percent}%` }}
-            />
-          </div>
-          <p className="result-meta">
-            Claim Probability: <strong>{percent}%</strong>
-            {"  •  "}Prediction code:{" "}
-            <strong>{result.claim_prediction}</strong>
-          </p>
-        </div>
+    <div className="card result" role="status" aria-live="polite">
+      <p className="card-title">Prediction Result</p>
+      <div className="result-head">
+        <span className="result-prob">{percent}</span>
+        <span className={`badge ${isLikely ? "badge-bad" : "badge-good"}`}>
+          {isLikely ? "Claim Likely" : "Claim Unlikely"}
+        </span>
       </div>
+
+      <div className="probbar" aria-hidden="true">
+        <div
+          className={`probbar-fill ${isLikely ? "fill-bad" : "fill-good"}`}
+          style={{ width: `${Math.min(Math.max(probability, 0), 1) * 100}%` }}
+        />
+        <span
+          className="probbar-threshold"
+          style={{ left: `${threshold * 100}%` }}
+          title={`Threshold ${Math.round(threshold * 100)}%`}
+        />
+      </div>
+      <p className={`threshold-note ${above ? "is-above" : "is-below"}`}>
+        {above ? "Above decision threshold" : "Below decision threshold"}
+      </p>
+
+      <dl className="kv">
+        <div className="kv-row">
+          <dt>Probability</dt>
+          <dd>{percent}</dd>
+        </div>
+        <div className="kv-row">
+          <dt>Decision Threshold</dt>
+          <dd>{Math.round(threshold * 100)}%</dd>
+        </div>
+        <div className="kv-row">
+          <dt>Model</dt>
+          <dd>{model}</dd>
+        </div>
+        {result.timestamp && (
+          <div className="kv-row">
+            <dt>Timestamp</dt>
+            <dd>{formatTime(result.timestamp)}</dd>
+          </div>
+        )}
+      </dl>
     </div>
   );
 }
