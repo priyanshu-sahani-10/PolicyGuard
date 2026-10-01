@@ -38,8 +38,8 @@ export default function usePredictionHistory() {
       timestamp: new Date().toISOString(),
       claim_probability: apiResult.claim_probability,
       claim_prediction: apiResult.claim_prediction,
-      threshold: THRESHOLD,
-      model: MODEL_NAME,
+      threshold: apiResult.threshold ?? THRESHOLD,
+      model: apiResult.model ?? MODEL_NAME,
     };
     setHistory((prev) => [record, ...prev]);
     return record;

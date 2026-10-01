@@ -145,4 +145,6 @@ def predict(data: ClaimRequest):
     return {
         "claim_probability": round(probability, 4),
         "claim_prediction": prediction,
+        "threshold": threshold,
+        "model": final_results.get("model"),
     }
