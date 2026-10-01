@@ -17,4 +17,11 @@ export async function getModelInfo() {
   return response.data;
 }
 
+export async function getDatasetSample(count = 20, seed = 42) {
+  const response = await apiClient.get("/dataset-sample", {
+    params: { count, seed },
+  });
+  return response.data;
+}
+
 export default apiClient;

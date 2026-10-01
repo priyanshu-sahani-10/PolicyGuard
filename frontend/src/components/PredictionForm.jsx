@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { predictClaim } from "../services/api";
 import {
   OPTIONS,
@@ -45,7 +45,7 @@ function Accordion({ id, title, count, open, onToggle, children }) {
  * Compact 41-field prediction form with collapsible sections.
  * Keeps the exact POST /predict payload via toPayload().
  */
-export default function PredictionForm({ onPrediction }) {
+export default function PredictionForm({ onPrediction, preset }) {
   const [values, setValues] = useState(INITIAL_VALUES);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -58,6 +58,15 @@ export default function PredictionForm({ onPrediction }) {
   });
 
   const toggle = (key) => setOpen((p) => ({ ...p, [key]: !p[key] }));
+
+  // Apply a dataset-row preset (a fresh object per selection).
+  useEffect(() => {
+    if (preset) {
+      setValues({ ...INITIAL_VALUES, ...preset.inputs });
+      setErrors({});
+      setApiError("");
+    }
+  }, [preset]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;

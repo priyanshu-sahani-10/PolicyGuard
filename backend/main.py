@@ -4,6 +4,7 @@ from pydantic import BaseModel
 import joblib
 import numpy as np
 import pandas as pd
+import re
 from pathlib import Path
 
 app = FastAPI(title="PolicyGuard API")
@@ -121,6 +122,123 @@ def root():
 @app.get("/model-info")
 def model_info():
     return model_info_payload()
+
+
+DATASET_PATH = BASE_DIR / "ml" / "data" / "insurance_claims.csv"
+TORQUE_RE = re.compile(r"([\d.]+)Nm@(\d+)rpm")
+POWER_RE = re.compile(r"([\d.]+)bhp@(\d+)rpm")
+
+_dataset_df = None
+
+
+def get_dataset():
+    """Load the training CSV once and cache it for row sampling."""
+    global _dataset_df
+    if _dataset_df is None:
+        try:
+            _dataset_df = pd.read_csv(DATASET_PATH)
+        except FileNotFoundError as exc:
+            raise HTTPException(
+                status_code=500, detail=f"Dataset file not found: {exc.filename}"
+            )
+    return _dataset_df
+
+
+def dataset_row_to_inputs(row: pd.Series) -> dict:
+    """Map one raw CSV row to the 41 POST /predict input fields."""
+    torque = TORQUE_RE.match(str(row["max_torque"]))
+    power = POWER_RE.match(str(row["max_power"]))
+    if not torque or not power:
+        raise ValueError("Unparseable max_torque/max_power value.")
+    return {
+        "subscription_length": float(row["subscription_length"]),
+        "vehicle_age": float(row["vehicle_age"]),
+        "customer_age": int(row["customer_age"]),
+        "region_code": str(row["region_code"]),
+        "region_density": int(row["region_density"]),
+        "segment": str(row["segment"]),
+        "model": str(row["model"]),
+        "fuel_type": str(row["fuel_type"]),
+        "engine_type": str(row["engine_type"]),
+        "airbags": int(row["airbags"]),
+        "is_esc": str(row["is_esc"]),
+        "is_adjustable_steering": str(row["is_adjustable_steering"]),
+        "is_tpms": str(row["is_tpms"]),
+        "is_parking_sensors": str(row["is_parking_sensors"]),
+        "is_parking_camera": str(row["is_parking_camera"]),
+        "rear_brakes_type": str(row["rear_brakes_type"]),
+        "displacement": int(row["displacement"]),
+        "cylinder": int(row["cylinder"]),
+        "transmission_type": str(row["transmission_type"]),
+        "steering_type": str(row["steering_type"]),
+        "turning_radius": float(row["turning_radius"]),
+        "length": int(row["length"]),
+        "width": int(row["width"]),
+        "gross_weight": int(row["gross_weight"]),
+        "is_front_fog_lights": str(row["is_front_fog_lights"]),
+        "is_rear_window_wiper": str(row["is_rear_window_wiper"]),
+        "is_rear_window_washer": str(row["is_rear_window_washer"]),
+        "is_rear_window_defogger": str(row["is_rear_window_defogger"]),
+        "is_brake_assist": str(row["is_brake_assist"]),
+        "is_power_door_locks": str(row["is_power_door_locks"]),
+        "is_central_locking": str(row["is_central_locking"]),
+        "is_power_steering": str(row["is_power_steering"]),
+        "is_driver_seat_height_adjustable": str(
+            row["is_driver_seat_height_adjustable"]
+        ),
+        "is_day_night_rear_view_mirror": str(
+            row["is_day_night_rear_view_mirror"]
+        ),
+        "is_ecw": str(row["is_ecw"]),
+        "is_speed_alert": str(row["is_speed_alert"]),
+        "ncap_rating": int(row["ncap_rating"]),
+        "torque_nm": float(torque.group(1)),
+        "torque_rpm": int(torque.group(2)),
+        "power_bhp": float(power.group(1)),
+        "power_rpm": int(power.group(2)),
+    }
+
+
+@app.get("/dataset-sample")
+def dataset_sample(count: int = 20, seed: int = 42):
+    """Return real dataset rows as ready-to-predict 41-field payloads.
+
+    The sample is balanced between claimed / non-claimed rows so users can
+    try both outcomes. Each row includes its actual claim_status for
+    prediction-vs-actual comparison.
+    """
+    if not 1 <= count <= 100:
+        raise HTTPException(
+            status_code=422, detail="count must be between 1 and 100."
+        )
+    df = get_dataset()
+    rng = np.random.default_rng(seed)
+    claimed = df.index[df["claim_status"] == 1].to_numpy()
+    unclaimed = df.index[df["claim_status"] == 0].to_numpy()
+    n_claimed = min(count // 2, len(claimed))
+    n_unclaimed = min(count - n_claimed, len(unclaimed))
+    picked = np.concatenate(
+        [
+            rng.choice(claimed, size=n_claimed, replace=False),
+            rng.choice(unclaimed, size=n_unclaimed, replace=False),
+        ]
+    )
+    rng.shuffle(picked)
+    rows = []
+    for idx in picked:
+        row = df.loc[int(idx)]
+        try:
+            inputs = dataset_row_to_inputs(row)
+        except (ValueError, KeyError):
+            continue
+        rows.append(
+            {
+                "policy_id": str(row["policy_id"]),
+                "inputs": inputs,
+                "actual_claim": int(row["claim_status"]),
+            }
+        )
+    return {"total_rows": int(len(df)), "rows": rows}
 
 
 @app.post("/predict")

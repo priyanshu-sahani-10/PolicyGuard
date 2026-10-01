@@ -433,6 +433,29 @@
   display: flex;
   gap: 10px;
 }
+
+/* Dataset row picker */
+.picker-row {
+  display: flex;
+  gap: 10px;
+}
+.picker-row select {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 11px;
+  font-size: 13.5px;
+  font-family: inherit;
+  color: var(--ink);
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.picker-row select:focus {
+  outline: none;
+  border-color: #2563eb;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
 .btn {
   cursor: pointer;
   font-family: inherit;
