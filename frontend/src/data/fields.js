@@ -1,8 +1,8 @@
 // Central definition of every field the POST /predict API expects.
 // Field names must stay exactly as defined here — the backend validates them.
 
-export const MODEL_NAME = "CatBoost";
-export const THRESHOLD = 0.59;
+export const MODEL_NAME = "CatBoost Native + Engineered Features";
+export const THRESHOLD = 0.57;
 
 export const OPTIONS = {
   region_code: ["C1","C10","C11","C12","C13","C14","C15","C16","C17","C18","C19","C2","C20","C21","C22","C3","C4","C5","C6","C7","C8","C9"],

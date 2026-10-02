@@ -7,15 +7,19 @@ import { getDatasetSample } from "../services/api";
  */
 export default function DatasetRowPicker({ onSelect }) {
   const [rows, setRows] = useState([]);
+  const [totalRows, setTotalRows] = useState(null);
   const [selected, setSelected] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let live = true;
-    getDatasetSample(20, 42)
+    getDatasetSample(100, 42)
       .then((data) => {
-        if (live) setRows(data.rows || []);
+        if (live) {
+          setRows(data.rows || []);
+          setTotalRows(data.total_rows ?? null);
+        }
       })
       .catch(() => {
         if (live)
@@ -76,6 +80,13 @@ export default function DatasetRowPicker({ onSelect }) {
         </div>
       )}
       <p className="muted small">
+        {rows.length > 0 && (
+          <>
+            Showing {rows.length}
+            {totalRows ? ` of ${totalRows.toLocaleString()}` : ""} sampled
+            policies.{" "}
+          </>
+        )}
         Rows come straight from the training dataset. The actual outcome is
         shown so you can compare it with the model&apos;s prediction.
       </p>

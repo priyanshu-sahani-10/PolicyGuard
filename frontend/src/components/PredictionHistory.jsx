@@ -50,8 +50,8 @@ export default function PredictionHistory({ history, onClear, compact }) {
                       {isLikely ? "Claim Likely" : "Claim Unlikely"}
                     </span>
                   </td>
-                  <td className="num">{Math.round((r.threshold ?? 0.59) * 100)}%</td>
-                  <td>{r.model ?? "CatBoost"}</td>
+                  <td className="num">{Math.round((r.threshold ?? 0.57) * 100)}%</td>
+                  <td>{r.model ?? "CatBoost Native + Engineered Features"}</td>
                   {!compact && (
                     <td>
                       <button

@@ -564,6 +564,17 @@
 .row-selected td {
   background: #eff6ff;
 }
+.compare-foot {
+  padding: 6px 18px 18px;
+}
+.why-list {
+  margin: 6px 0 8px;
+  padding-left: 20px;
+  font-size: 13.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 .row-detail {
   display: flex;
   flex-direction: column;

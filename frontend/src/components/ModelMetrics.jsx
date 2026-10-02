@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getModelInfo } from "../services/api";
+import ModelComparison from "./ModelComparison";
 
 function formatPct(x) {
   return `${(Math.round(Number(x) * 10000) / 100).toFixed(2)}%`;
@@ -55,16 +56,25 @@ export default function ModelMetrics() {
   ];
 
   return (
+    <>
     <div className="card">
-      <p className="card-title">Model Information</p>
+      <p className="card-title">Final Model</p>
       <dl className="kv">
         <div className="kv-row">
           <dt>Model</dt>
-          <dd>{info.model}</dd>
+          <dd>CatBoost</dd>
         </div>
         <div className="kv-row">
-          <dt>Decision Threshold</dt>
-          <dd>{Math.round(info.threshold * 100)}%</dd>
+          <dt>Feature handling</dt>
+          <dd>Native categorical features + engineered features</dd>
+        </div>
+        <div className="kv-row">
+          <dt>Classification Threshold</dt>
+          <dd>{Number(info.threshold).toFixed(2)} (validation-selected)</dd>
+        </div>
+        <div className="kv-row">
+          <dt>Configuration</dt>
+          <dd>{info.model}</dd>
         </div>
         {info.weights &&
           Object.entries(info.weights).map(([name, w]) => (
@@ -96,5 +106,11 @@ export default function ModelMetrics() {
         These values describe test-set performance and do not represent production performance.
       </p>
     </div>
+    <ModelComparison
+      comparison={info.model_comparison}
+      threshold={info.model_comparison_threshold}
+      selected={info.selected_model}
+    />
+    </>
   );
 }

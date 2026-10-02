@@ -1,0 +1,16 @@
+{
+  "model": "CatBoost Native + Engineered Features",
+  "threshold": 0.5700000000000002,
+  "precision": 0.11044034090909091,
+  "recall": 0.4146666666666667,
+  "f1_score": 0.17442512619181155,
+  "pr_auc": 0.10586241365181581,
+  "roc_auc": 0.6635270307229464,
+  "true_negatives": 8464,
+  "false_positives": 2505,
+  "false_negatives": 439,
+  "true_positives": 311,
+  "validation_pr_auc": 0.11532729897553921,
+  "validation_f1": 0.18060985144644254,
+  "iterations": 85
+}
