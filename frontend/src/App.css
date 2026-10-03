@@ -643,12 +643,129 @@
   color: var(--muted);
 }
 
+/* Analytics dashboard */
+.ana-h2 {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  color: var(--ink);
+  margin: 2px 0 2px;
+}
+.ana-section-head {
+  margin-top: 4px;
+}
+.ana-section-head .card-title {
+  margin-bottom: 2px;
+}
+.ana-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.donut {
+  width: 140px;
+  height: 140px;
+  flex-shrink: 0;
+}
+.donut-track {
+  fill: none;
+  stroke: #e8edf5;
+  stroke-width: 18;
+}
+.donut-claim {
+  fill: none;
+  stroke: #dc2626;
+  stroke-width: 18;
+  stroke-linecap: butt;
+  transform: rotate(-90deg);
+  transform-origin: 70px 70px;
+}
+.donut-big {
+  font-size: 18px;
+  font-weight: 800;
+  fill: var(--ink);
+}
+.donut-small {
+  font-size: 10px;
+  fill: var(--muted);
+}
+.legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--text);
+}
+.swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  margin-right: 8px;
+}
+.sw-claim {
+  background: #dc2626;
+}
+.sw-no {
+  background: #2563eb;
+}
+.ratebars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ratebar-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.ratebar-key {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ratebar-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #e8edf5;
+  margin-top: 5px;
+}
+.ratebar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #2563eb;
+}
+.ratebar-sub {
+  margin-top: 3px;
+}
+.region-scroll {
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
 /* Responsive: tablet two-column, mobile single column */
 @media (max-width: 960px) {
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
   }
   .dash-grid {
+    grid-template-columns: 1fr;
+  }
+  .ana-grid-3 {
     grid-template-columns: 1fr;
   }
   .grid {

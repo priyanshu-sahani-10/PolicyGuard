@@ -24,4 +24,9 @@ export async function getDatasetSample(count = 20, seed = 42) {
   return response.data;
 }
 
+export async function getAnalytics() {
+  const response = await apiClient.get("/analytics");
+  return response.data;
+}
+
 export default apiClient;

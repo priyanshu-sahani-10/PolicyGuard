@@ -1,5 +1,6 @@
 const LINKS = [
   { key: "dashboard", label: "Dashboard" },
+  { key: "analytics", label: "Analytics" },
   { key: "new", label: "New Prediction" },
   { key: "history", label: "Prediction History" },
   { key: "model", label: "Model" },

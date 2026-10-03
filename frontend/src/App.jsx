@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Navbar from "./components/Navbar";
 import Dashboard from "./pages/Dashboard";
+import Analytics from "./pages/Analytics";
 import NewPrediction from "./pages/NewPrediction";
 import History from "./pages/History";
 import Model from "./pages/Model";
@@ -25,6 +26,7 @@ export default function App() {
           />
         )}
         {page === "new" && <NewPrediction onPrediction={addPrediction} />}
+        {page === "analytics" && <Analytics />}
         {page === "history" && (
           <History history={history} onClear={clearHistory} onNavigate={setPage} />
         )}

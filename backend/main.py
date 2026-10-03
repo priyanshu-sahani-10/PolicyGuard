@@ -436,6 +436,188 @@ def dataset_sample(count: int = 20, seed: int = 42):
     return {"total_rows": int(len(df)), "rows": rows}
 
 
+# ============================================================
+# Analytics (read-only, CSV aggregates only)
+# ============================================================
+#
+# Single aggregated endpoint so the frontend never downloads
+# the full 58k-row CSV. Computed directly from
+# ml/data/insurance_claims.csv — never touches the CatBoost
+# model, threshold, or prediction logic.
+# ============================================================
+
+_analytics_cache = None
+
+
+def _rate_frame(df: pd.DataFrame, group_col: str) -> list:
+    """total / claims / claim_rate per distinct value, safest sort."""
+    series = df[group_col]
+    tmp = pd.DataFrame({"key": series.astype(str), "claim": df["claim_status"]})
+    grouped = tmp.groupby("key", dropna=False)["claim"].agg(["count", "sum", "mean"])
+    out = []
+    for key, row in grouped.iterrows():
+        label = "Unknown" if key in ("nan", "None", "") else str(key)
+        out.append(
+            {
+                "key": label,
+                "total": int(row["count"]),
+                "claims": int(row["sum"]),
+                "claim_rate": round(float(row["mean"]), 4),
+            }
+        )
+    out.sort(key=lambda r: r["claim_rate"], reverse=True)
+    return out
+
+
+def _binned_rates(values: pd.Series, claims: pd.Series, bins: list, labels: list) -> list:
+    """Claim rate per numeric bin. Empty bins are kept with total 0."""
+    cats = pd.cut(values, bins=bins, labels=labels, include_lowest=True)
+    out = []
+    for label in labels:
+        mask = cats == label
+        total = int(mask.sum())
+        if total == 0:
+            out.append({"key": label, "total": 0, "claims": 0, "claim_rate": 0.0})
+            continue
+        c = claims[mask]
+        rate = float(c.mean()) if len(c) else 0.0
+        out.append(
+            {
+                "key": label,
+                "total": total,
+                "claims": int(c.sum()),
+                "claim_rate": round(rate, 4),
+            }
+        )
+    return out
+
+
+def _highest(rates: list) -> dict | None:
+    """Highest observed claim rate among bins with data."""
+    valid = [r for r in rates if r.get("total", 0) > 0]
+    if not valid:
+        return None
+    return max(valid, key=lambda r: r["claim_rate"])
+
+
+@app.get("/analytics")
+def analytics():
+    """Aggregated dataset statistics for the Analytics dashboard."""
+    global _analytics_cache
+    if _analytics_cache is not None:
+        return _analytics_cache
+
+    df = get_dataset()
+    if "claim_status" not in df.columns:
+        raise HTTPException(status_code=500, detail="Dataset missing claim_status column.")
+
+    claims = pd.to_numeric(df["claim_status"], errors="coerce").fillna(0).astype(int)
+    total = int(len(df))
+    total_claims = int(claims.sum())
+    total_no_claims = total - total_claims
+    claim_rate = round(float(claims.mean()) if total else 0.0, 4)
+
+    vehicle_age = pd.to_numeric(df.get("vehicle_age"), errors="coerce")
+    customer_age = pd.to_numeric(df.get("customer_age"), errors="coerce")
+    subscription = pd.to_numeric(df.get("subscription_length"), errors="coerce")
+    displacement = pd.to_numeric(df.get("displacement"), errors="coerce")
+    gross_weight = pd.to_numeric(df.get("gross_weight"), errors="coerce")
+    region_density = pd.to_numeric(df.get("region_density"), errors="coerce")
+
+    # Customer-age bins adapted to the actual data (min age is 35,
+    # so an 18-30 bin would always be empty).
+    vehicle_age_rates = _binned_rates(
+        vehicle_age, claims,
+        bins=[-0.001, 2, 5, 10, float("inf")],
+        labels=["0–2", "2–5", "5–10", "10+"],
+    )
+    customer_age_rates = _binned_rates(
+        customer_age, claims,
+        bins=[-0.001, 40, 45, 50, 60, float("inf")],
+        labels=["35–40", "41–45", "46–50", "51–60", "60+"],
+    )
+    subscription_rates = _binned_rates(
+        subscription, claims,
+        bins=[-0.001, 2, 5, 10, float("inf")],
+        labels=["0–2 yrs", "2–5 yrs", "5–10 yrs", "10+ yrs"],
+    )
+    displacement_rates = _binned_rates(
+        displacement, claims,
+        bins=[-0.001, 900, 1200, float("inf")],
+        labels=["≤900 cc", "901–1200 cc", ">1200 cc"],
+    )
+    gross_weight_rates = _binned_rates(
+        gross_weight, claims,
+        bins=[-0.001, 1200, 1400, 1600, float("inf")],
+        labels=["<1200 kg", "1200–1399 kg", "1400–1599 kg", "1600+ kg"],
+    )
+
+    segment_rates = _rate_frame(df, "segment")
+    fuel_rates = _rate_frame(df, "fuel_type")
+    ncap_rates = _rate_frame(df, "ncap_rating")
+    region_rates = _rate_frame(df, "region_code")
+
+    # Average region density per region (observed, not causal).
+    region_density_avg = []
+    if region_density.notna().any():
+        tmp = pd.DataFrame(
+            {"key": df["region_code"].astype(str), "density": region_density}
+        )
+        avg = tmp.groupby("key")["density"].mean()
+        region_density_avg = [
+            {"key": str(k), "avg_density": round(float(v), 1)}
+            for k, v in avg.items()
+        ]
+
+    insights = {
+        "overall_claim_rate": claim_rate,
+        "highest_segment": _highest(segment_rates),
+        "highest_fuel": _highest(fuel_rates),
+        "highest_region": _highest(region_rates),
+        "highest_vehicle_age_group": _highest(vehicle_age_rates),
+        "highest_customer_age_group": _highest(customer_age_rates),
+        "highest_subscription_group": _highest(subscription_rates),
+        "highest_ncap": _highest(ncap_rates),
+    }
+
+    _analytics_cache = {
+        "summary": {
+            "total_policies": total,
+            "total_claims": total_claims,
+            "total_no_claims": total_no_claims,
+            "claim_rate": claim_rate,
+        },
+        "claim_distribution": [
+            {"key": "No claim", "count": total_no_claims},
+            {"key": "Claim", "count": total_claims},
+        ],
+        "segment_claim_rate": segment_rates,
+        "fuel_claim_rate": fuel_rates,
+        "region_claim_rate": region_rates,
+        "region_density_avg": region_density_avg,
+        "vehicle_age_claim_rate": vehicle_age_rates,
+        "customer_age_claim_rate": customer_age_rates,
+        "subscription_length_claim_rate": subscription_rates,
+        "ncap_claim_rate": ncap_rates,
+        "displacement_claim_rate": displacement_rates,
+        "gross_weight_claim_rate": gross_weight_rates,
+        "model_comparison": MODEL_COMPARISON,
+        "model_comparison_threshold": MODEL_COMPARISON_THRESHOLD,
+        "selected_model": SELECTED_MODEL,
+        "final_model": {
+            "model": final_results["model"],
+            "threshold": round(float(threshold), 4),
+            "precision": final_results["precision"],
+            "recall": final_results["recall"],
+            "f1_score": final_results["f1_score"],
+            "pr_auc": final_results["pr_auc"],
+            "roc_auc": final_results["roc_auc"],
+        },
+        "insights": insights,
+    }
+    return _analytics_cache
+
+
 @app.post("/predict")
 def predict(data: ClaimRequest):
     # --------------------------------------------------------
